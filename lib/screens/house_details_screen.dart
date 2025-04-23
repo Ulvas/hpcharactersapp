@@ -7,105 +7,87 @@ class HouseDetailsScreen extends StatefulWidget {
   const HouseDetailsScreen({super.key, required this.house});
 
   @override
-  _HouseDetailsScreenState createState() => _HouseDetailsScreenState();
+  State<HouseDetailsScreen> createState() => _HouseDetailsScreenState();
 }
 
 class _HouseDetailsScreenState extends State<HouseDetailsScreen> {
   late Future<List<dynamic>> characters;
   final dio = Dio();
-  bool _isCardOpen = false;
-  Map<String, dynamic>? _selectedCharacter;
+  bool isCardOpen = false;
+  Map<String, dynamic>? selectedCharacter;
 
   @override
   void initState() {
     super.initState();
-    characters = fetchCharactersByHouse(widget.house);
+    characters = fetchCharacters(widget.house);
   }
 
-  Future<List<dynamic>> fetchCharactersByHouse(String house) async {
+  Future<List<dynamic>> fetchCharacters(String house) async {
     try {
-      final response = await dio.get('https://hp-api.onrender.com/api/characters');
-      if (response.statusCode == 200) {
-        List<dynamic> data = response.data as List<dynamic>;
-
-        return data.where((character) {
-          final charHouse = character['house'] ?? '';
-          if (house == 'Others') {
-            return charHouse.isEmpty;
-          } else {
-            return charHouse == house;
-          }
+      final res = await dio.get('https://hp-api.onrender.com/api/characters');
+      if (res.statusCode == 200) {
+        final all = res.data as List<dynamic>;
+        return all.where((char) {
+          final h = char['house'] ?? '';
+          return house == 'Others' ? h.isEmpty : h == house;
         }).toList();
       } else {
-        throw Exception('Failed to load characters');
+        throw Exception('Request failed');
       }
     } catch (e) {
-      throw Exception('Failed to load characters: $e');
+      throw Exception('Error fetching characters: $e');
     }
   }
 
-  Widget buildCharacterImage(String? imageUrl, String? gender) {
-    String placeholderPath;
-
-    if (gender == 'female') {
-      placeholderPath = 'assets/images/femalePH.jpg';
-    } else {
-      placeholderPath = 'assets/images/malePH.jpg';
-    }
-
-    const double imageSize = 90;
-
-    Widget imageWidget;
-
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      imageWidget = Image.network(
-        imageUrl,
-        width: imageSize,
-        height: imageSize,
-        fit: BoxFit.cover,
-        alignment: Alignment.topCenter,
-        errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            placeholderPath,
-            width: imageSize,
-            height: imageSize,
-            fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
-          );
-        },
-      );
-    } else {
-      imageWidget = Image.asset(
-        placeholderPath,
-        width: imageSize,
-        height: imageSize,
-        fit: BoxFit.cover,
-        alignment: Alignment.topCenter,
-      );
-    }
+  Widget buildImage(String? url, String? gender) {
+    final fallback = gender == 'female'
+        ? 'assets/images/femalePH.jpg'
+        : 'assets/images/malePH.jpg';
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: imageWidget,
+      child: url != null && url.isNotEmpty
+          ? Image.network(
+        url,
+        width: 90,
+        height: 90,
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
+        errorBuilder: (_, __, ___) => Image.asset(
+          fallback,
+          width: 90,
+          height: 90,
+          fit: BoxFit.cover,
+        ),
+      )
+          : Image.asset(
+        fallback,
+        width: 90,
+        height: 90,
+        fit: BoxFit.cover,
+      ),
     );
   }
 
-  void _openCharacterCard(Map<String, dynamic> character) {
+  void openCard(Map<String, dynamic> char) {
     setState(() {
-      _isCardOpen = true;
-      _selectedCharacter = character;
+      selectedCharacter = char;
+      isCardOpen = true;
     });
   }
 
-  void _closeCharacterCard() {
+  void closeCard() {
     setState(() {
-      _isCardOpen = false;
-      _selectedCharacter = null;
+      isCardOpen = false;
+      selectedCharacter = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final bgPath = 'assets/houses/${widget.house}BG.png';
+    final logoPath = 'assets/houses/${widget.house}.png';
+
     return Scaffold(
       body: Stack(
         children: [
@@ -113,23 +95,13 @@ class _HouseDetailsScreenState extends State<HouseDetailsScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: Image.asset(
-              'assets/houses/${widget.house}BG.png',
-              height: 120,
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset(bgPath, height: 120, fit: BoxFit.cover),
           ),
           Positioned(
             top: 30,
             left: 0,
             right: 0,
-            child: Center(
-              child: Image.asset(
-                'assets/houses/${widget.house}.png',
-                height: 60,
-                fit: BoxFit.contain,
-              ),
-            ),
+            child: Center(child: Image.asset(logoPath, height: 60)),
           ),
           Positioned(
             top: 40,
@@ -154,7 +126,7 @@ class _HouseDetailsScreenState extends State<HouseDetailsScreen> {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
 
-                final characters = snapshot.data ?? [];
+                final items = snapshot.data ?? [];
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -165,28 +137,22 @@ class _HouseDetailsScreenState extends State<HouseDetailsScreen> {
                       mainAxisSpacing: 12,
                       childAspectRatio: 1,
                     ),
-                    itemCount: characters.length,
-                    itemBuilder: (context, index) {
-                      final character = characters[index];
-                      final name = character['name'] ?? 'Unknown';
-                      final imageUrl = character['image'];
-                      final gender = character['gender'];
-                      final house = character['house'];
-
+                    itemCount: items.length,
+                    itemBuilder: (_, i) {
+                      final c = items[i];
+                      final house = c['house'] ?? '';
                       return GestureDetector(
-                        onTap: () => _openCharacterCard(character),
+                        onTap: () => openCard(c),
                         child: Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
-                            image: house != null && house.isNotEmpty
+                            image: house.isNotEmpty
                                 ? DecorationImage(
                               image: AssetImage('assets/houses/${house}BG.png'),
                               fit: BoxFit.cover,
                             )
                                 : null,
-                            color: house == null || house.isEmpty
-                                ? Colors.grey[300]
-                                : null,
+                            color: house.isEmpty ? Colors.grey[300] : null,
                           ),
                           child: Container(
                             padding: const EdgeInsets.all(8),
@@ -195,18 +161,14 @@ class _HouseDetailsScreenState extends State<HouseDetailsScreen> {
                               color: Colors.black.withOpacity(0.5),
                             ),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: buildCharacterImage(imageUrl, gender),
-                                ),
+                                buildImage(c['image'], c['gender']),
                                 const SizedBox(height: 10),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 4),
                                   child: Text(
-                                    name,
+                                    c['name'] ?? 'Unknown',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -226,78 +188,75 @@ class _HouseDetailsScreenState extends State<HouseDetailsScreen> {
               },
             ),
           ),
-          if (_isCardOpen && _selectedCharacter != null) ...[
-            GestureDetector(
-              onTap: _closeCharacterCard,
-              child: Container(
-                color: Colors.black.withOpacity(0.6),
-                width: double.infinity,
-                height: double.infinity,
+          if (isCardOpen && selectedCharacter != null)
+            ...[
+              GestureDetector(
+                onTap: closeCard,
+                child: Container(
+                  color: Colors.black54,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
               ),
-            ),
-            Center(
-              child: Material(
-                color: Colors.white,
-                elevation: 5,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          image: DecorationImage(
-                            image: AssetImage(
-                              'assets/houses/${_selectedCharacter?['house']}BG.png',
+              Center(
+                child: Material(
+                  color: Colors.white,
+                  elevation: 5,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            image: DecorationImage(
+                              image: AssetImage(
+                                'assets/houses/${selectedCharacter!['house']}BG.png',
+                              ),
+                              fit: BoxFit.cover,
                             ),
-                            fit: BoxFit.cover,
+                          ),
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              buildImage(
+                                  selectedCharacter!['image'], selectedCharacter!['gender']),
+                              const SizedBox(height: 16),
+                              Text(
+                                selectedCharacter!['name'] ?? 'Unknown',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'House: ${selectedCharacter!['house'] ?? 'Unknown'}',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Actor: ${selectedCharacter!['actor'] ?? 'Unknown'}',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Patronus: ${selectedCharacter!['patronus'] ?? 'None'}',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ],
                           ),
                         ),
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            const SizedBox(height: 16),
-                            buildCharacterImage(
-                                _selectedCharacter?['image'], _selectedCharacter?['gender']),
-                            const SizedBox(height: 16),
-                            Text(
-                              _selectedCharacter?['name'] ?? 'Unknown',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'House: ${_selectedCharacter?['house'] ?? 'Unknown'}',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Actor: ${_selectedCharacter?['actor'] ?? 'Unknown'}',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Patronus: ${_selectedCharacter?['patronus'] ?? 'None'}',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
         ],
       ),
     );
